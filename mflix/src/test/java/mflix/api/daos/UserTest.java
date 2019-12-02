@@ -67,6 +67,8 @@ public class UserTest extends TicketTest {
                 dao.addUser(testUser)); // add string explanation
 
         User user = dao.getUser(testUser.getEmail());
+
+        Assert.assertNotNull(user);
         Assert.assertEquals(testUser.getName(), user.getName());
         Assert.assertEquals(testUser.getEmail(), user.getEmail());
         Assert.assertEquals(testUser.getHashedpw(), user.getHashedpw());

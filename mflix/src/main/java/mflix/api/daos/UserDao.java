@@ -19,6 +19,7 @@ import org.springframework.context.annotation.Configuration;
 import java.util.Map;
 
 import static com.mongodb.client.model.Filters.eq;
+import static com.mongodb.client.model.Updates.set;
 import static org.bson.codecs.configuration.CodecRegistries.fromProviders;
 import static org.bson.codecs.configuration.CodecRegistries.fromRegistries;
 
@@ -26,6 +27,8 @@ import static org.bson.codecs.configuration.CodecRegistries.fromRegistries;
 public class UserDao extends AbstractMFlixDao {
 
     public static final String USER_ID_FIELD = "user_id";
+    public static final String USER_EMAIL_FIELD = "email";
+    public static final String USER_FIELD_PREFERENCES = "preferences";
     private final MongoCollection<User> usersCollection;
     //DONE> Ticket: User Management - do the necessary changes so that the sessions collection
     //returns a Session object
@@ -57,11 +60,22 @@ public class UserDao extends AbstractMFlixDao {
      */
     public boolean addUser(User user) {
         //DONE > Ticket: Durable Writes -  you might want to use a more durable write concern here!
-        usersCollection.withWriteConcern(WriteConcern.MAJORITY).insertOne(user);
-        return true;
-        //TODO > Ticket: Handling Errors - make sure to only add new users
-        // and not users that already exist.
+        log.debug("Add a user {}", user);
 
+        //DONE > Ticket: Handling Errors - make sure to only add new users
+        // and not users that already exist.
+        if (getUser(user.getEmail()) != null) {
+            return true;
+        }
+
+        try {
+            usersCollection.withWriteConcern(WriteConcern.MAJORITY).insertOne(user);
+        } catch (MongoWriteException e) {
+            log.debug("Adding user {} was failed", user.getEmail());
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -80,6 +94,10 @@ public class UserDao extends AbstractMFlixDao {
 
         //DONE > Ticket: Handling Errors - implement a safeguard against
         // creating a session with the same jwt token.
+        if (getUserSession(userId) != null) {
+            return true;
+        }
+
         try {
             sessionsCollection.insertOne(session);
         } catch (MongoWriteException e) {
@@ -100,7 +118,7 @@ public class UserDao extends AbstractMFlixDao {
     public User getUser(String email) {
         log.debug("Get user with email {}", email);
         //DONE> Ticket: User Management - implement the query that returns the first User object.
-        return usersCollection.find(eq("email", email)).first();
+        return usersCollection.find(eq(USER_EMAIL_FIELD, email)).first();
     }
 
     /**
@@ -135,7 +153,7 @@ public class UserDao extends AbstractMFlixDao {
         // remove user sessions
         deleteUserSessions(email);
         //DONE> Ticket: User Management - implement the delete user method
-        return usersCollection.deleteOne(eq("email", email)).wasAcknowledged();
+        return usersCollection.deleteOne(eq(USER_EMAIL_FIELD, email)).wasAcknowledged();
         //TODO > Ticket: Handling Errors - make this method more robust by
         // handling potential exceptions.
     }
@@ -149,10 +167,17 @@ public class UserDao extends AbstractMFlixDao {
      * @return User object that just been updated.
      */
     public boolean updateUserPreferences(String email, Map<String, ?> userPreferences) {
-        //TODO> Ticket: User Preferences - implement the method that allows for user preferences to
+        //DONE> Ticket: User Preferences - implement the method that allows for user preferences to
         // be updated.
+
+        if (userPreferences == null || userPreferences.isEmpty()) {
+            throw new IncorrectDaoOperation("User preferences can not be null.");
+        }
+
+        usersCollection.updateOne(eq(USER_EMAIL_FIELD, email), set(USER_FIELD_PREFERENCES, userPreferences));
+
         //TODO > Ticket: Handling Errors - make this method more robust by
         // handling potential exceptions when updating an entry.
-        return false;
+        return true;
     }
 }
