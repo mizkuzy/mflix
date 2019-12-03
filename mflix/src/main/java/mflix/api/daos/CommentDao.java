@@ -1,13 +1,18 @@
 package mflix.api.daos;
 
 import com.mongodb.MongoClientSettings;
+import com.mongodb.MongoWriteException;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
+import com.mongodb.client.model.Filters;
+import com.mongodb.client.model.Updates;
+import com.mongodb.client.result.UpdateResult;
 import mflix.api.models.Comment;
 import mflix.api.models.Critic;
 import org.bson.Document;
 import org.bson.codecs.configuration.CodecRegistry;
 import org.bson.codecs.pojo.PojoCodecProvider;
+import org.bson.conversions.Bson;
 import org.bson.types.ObjectId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,7 +29,10 @@ import static org.bson.codecs.configuration.CodecRegistries.fromRegistries;
 @Component
 public class CommentDao extends AbstractMFlixDao {
 
+    public static final String COMMENT_TEXT_FIELD = "text";
+    public static final String COMMENT_EMAIL_FIELD = "email";
     public static String COMMENT_COLLECTION = "comments";
+    public static String ID_FIELD = "_id";
     private final Logger log;
     private MongoCollection<Comment> commentCollection;
     private CodecRegistry pojoCodecRegistry;
@@ -66,11 +74,28 @@ public class CommentDao extends AbstractMFlixDao {
      */
     public Comment addComment(Comment comment) {
 
-        // TODO> Ticket - Update User reviews: implement the functionality that enables adding a new
-        // comment.
-        // TODO> Ticket - Handling Errors: Implement a try catch block to
-        // handle a potential write exception when given a wrong commentId.
-        return null;
+        // DONE> Ticket - Update User reviews: implement the functionality that enables adding a new
+        //  comment.
+        // DONE> Ticket - Handling Errors: Implement a try catch block to
+        //  handle a potential write exception when given a wrong commentId.
+        if (comment.getId() == null || comment.getId().isEmpty()) {
+            String errorMessage = String.format("Comment from %s for the movie %s without id can not be created.",
+                    comment.getEmail(), comment.getMovieId());
+            log.debug(errorMessage);
+
+            throw new IncorrectDaoOperation(errorMessage);
+        }
+
+        try {
+            commentCollection.insertOne(comment);
+        } catch (MongoWriteException e) {
+            String errorMessage = String.format("Comment from %s for the movie %s can not be created.",
+                    comment.getEmail(), comment.getMovieId());
+            log.debug(errorMessage);
+            throw new IncorrectDaoOperation(errorMessage);
+        }
+
+        return comment;
     }
 
     /**
@@ -88,11 +113,25 @@ public class CommentDao extends AbstractMFlixDao {
      */
     public boolean updateComment(String commentId, String text, String email) {
 
-        // TODO> Ticket - Update User reviews: implement the functionality that enables updating an
-        // user own comments
-        // TODO> Ticket - Handling Errors: Implement a try catch block to
-        // handle a potential write exception when given a wrong commentId.
-        return false;
+        // DONE> Ticket - Update User reviews: implement the functionality that enables updating an
+        //  user own comments
+        // DONE> Ticket - Handling Errors: Implement a try catch block to
+        //  handle a potential write exception when given a wrong commentId.
+        Bson filter = Filters.and(
+                Filters.eq(COMMENT_EMAIL_FIELD, email),
+                Filters.eq(ID_FIELD, new ObjectId(commentId)));
+        try {
+            UpdateResult updateResult = commentCollection.updateOne(
+                    filter,
+                    Updates.set(COMMENT_TEXT_FIELD, text));
+
+            return updateResult.getModifiedCount() == 1;
+        } catch (MongoWriteException e) {
+            String errorMessage = String.format("Comment %s can not be updated.", commentId);
+            log.debug(errorMessage);
+
+            throw new IncorrectDaoOperation(errorMessage);
+        }
     }
 
     /**
